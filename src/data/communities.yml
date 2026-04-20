@@ -100,6 +100,12 @@
   description: Portland ATProtocol user group
   bluesky: https://bsky.app/profile/pdx.atproto.camp
 
+- name: Richmond AT://Community
+  handle: richmond.atprotocol.community
+  location: Richmond, VA, US
+  description: An ATProto Community for Richmond, VA
+  bluesky: https://bsky.app/profile/richmond.atprotocol.community
+
 - name: ATProto Seattle
   handle: seattle.atprotocol.community
   location: Seattle, WA
