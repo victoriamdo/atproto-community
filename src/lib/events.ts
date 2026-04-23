@@ -33,7 +33,7 @@ interface RawUri {
   source?: string;
 }
 
-interface RawEvent {
+export interface RawEvent {
   $type: string;
   name: string;
   startsAt: string;
@@ -154,7 +154,7 @@ function simplifyAddress(raw: string): string {
 /**
  * Parse a raw event record into our clean format.
  */
-function parseEvent(v: RawEvent, source: string, uri: string): CommunityEvent {
+export function parseEvent(v: RawEvent, source: string, uri: string): CommunityEvent {
   // Parse mode
   let mode: CommunityEvent['mode'] = 'in_person';
   if (v.mode?.includes('#virtual')) mode = 'online';

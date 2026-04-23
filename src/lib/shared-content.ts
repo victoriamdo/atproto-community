@@ -5,6 +5,7 @@
  */
 
 import { getProfile, type AtProfile } from './atproto';
+import { parseEvent, type CommunityEvent, type RawEvent } from './events';
 
 const COLLECTION = 'community.opensocial.sharedContent';
 
@@ -28,6 +29,11 @@ interface RawSharedContent {
   sharedBy: string;
   documentUri: string;
   documentCid: string;
+  // Event-specific fields (present when type='event')
+  startsAt?: string;
+  endsAt?: string;
+  location?: string;
+  mode?: string;
 }
 
 interface RawDocument {
@@ -141,7 +147,7 @@ async function fetchSharedFromAccount(handleOrDid: string): Promise<RawSharedCon
 
     const data = await res.json();
     for (const r of data.records as Array<{ uri: string; value: RawSharedContent }>) {
-      if (r.value.type === 'document' && r.value.documentUri) {
+      if (r.value.documentUri) {
         records.push(r.value);
       }
     }
@@ -174,9 +180,10 @@ export async function fetchSharedContent(
     }
   }
 
-  // Deduplicate by documentUri
+  // Deduplicate by documentUri, filter to documents only
   const seen = new Set<string>();
   const unique = allRecords.filter(r => {
+    if (r.type !== 'document') return false;
     if (seen.has(r.documentUri)) return false;
     seen.add(r.documentUri);
     return true;
@@ -250,4 +257,85 @@ export async function fetchSharedContent(
     const db = new Date(b.date).getTime() || 0;
     return db - da;
   });
+}
+
+/**
+ * Fetch shared events from multiple accounts.
+ * Resolves the full event record from each documentUri, then parses it
+ * into CommunityEvent objects using the same logic as direct event fetching.
+ */
+export async function fetchSharedEvents(
+  accounts: string[]
+): Promise<CommunityEvent[]> {
+  const results = await Promise.allSettled(
+    accounts.map(a => fetchSharedFromAccount(a))
+  );
+
+  const allRecords: Array<RawSharedContent & { _community: string }> = [];
+  for (let i = 0; i < results.length; i++) {
+    if (results[i].status === 'fulfilled') {
+      const recs = (results[i] as PromiseFulfilledResult<RawSharedContent[]>).value;
+      allRecords.push(...recs.map(r => ({ ...r, _community: accounts[i] })));
+    } else {
+      console.warn(`Failed to fetch shared events from ${accounts[i]}:`,
+        (results[i] as PromiseRejectedResult).reason);
+    }
+  }
+
+  // Deduplicate by documentUri, filter to events only
+  const seen = new Set<string>();
+  const unique = allRecords.filter(r => {
+    if (r.type !== 'event') return false;
+    if (seen.has(r.documentUri)) return false;
+    seen.add(r.documentUri);
+    return true;
+  });
+
+  const events: CommunityEvent[] = [];
+  const BATCH_SIZE = 10;
+
+  for (let i = 0; i < unique.length; i += BATCH_SIZE) {
+    const batch = unique.slice(i, i + BATCH_SIZE);
+    const resolved = await Promise.allSettled(
+      batch.map(async (record) => {
+        // Fetch the full event record to get uris, description, etc.
+        const fullEvent = await fetchRecord(record.documentUri) as RawEvent | null;
+
+        if (fullEvent) {
+          return parseEvent(fullEvent, record._community, record.documentUri);
+        }
+
+        // Fallback: build a CommunityEvent from the shared content metadata
+        let mode: CommunityEvent['mode'] = 'in_person';
+        if (record.mode === 'virtual') mode = 'online';
+        else if (record.mode === 'hybrid') mode = 'hybrid';
+
+        // Build a fallback href from the documentUri
+        let href = '';
+        const match = record.documentUri.match(/at:\/\/([^/]+)\/[^/]+\/(.+)/);
+        if (match) {
+          href = `https://smokesignal.events/${match[1]}/${match[2]}`;
+        }
+
+        return {
+          name: record.title,
+          date: record.startsAt ?? record.sharedAt,
+          endDate: record.endsAt,
+          location: record.location,
+          mode,
+          description: undefined,
+          href,
+          source: record._community,
+        } satisfies CommunityEvent;
+      })
+    );
+
+    for (const result of resolved) {
+      if (result.status === 'fulfilled' && result.value) {
+        events.push(result.value);
+      }
+    }
+  }
+
+  return events;
 }

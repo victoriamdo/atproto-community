@@ -11,7 +11,7 @@ import communitiesRaw from '../data/communities.yml?raw';
 import { getProfile, excerpt } from '../lib/atproto';
 import { fetchBlogPosts } from '../lib/blog';
 import { fetchEvents } from '../lib/events';
-import { fetchSharedContent } from '../lib/shared-content';
+import { fetchSharedContent, fetchSharedEvents } from '../lib/shared-content';
 import { preflight } from '../lib/preflight';
 
 interface Community {
@@ -108,7 +108,19 @@ const eventAccounts = [
 
 // Fetch events from ATProto (community.lexicon.calendar.event)
 // Individual community failures are tolerated; only total failure crashes the build.
-const liveEvents = await fetchEvents(eventAccounts);
+const [directEvents, sharedEventsList] = await Promise.all([
+  fetchEvents(eventAccounts),
+  fetchSharedEvents(eventAccounts),
+]);
+
+// Merge and deduplicate by name + start time
+const seenEvents = new Set<string>();
+const liveEvents = [...directEvents, ...sharedEventsList].filter(e => {
+  const key = `${e.name.toLowerCase().trim()}|${e.date}`;
+  if (seenEvents.has(key)) return false;
+  seenEvents.add(key);
+  return true;
+}).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 const events = liveEvents.slice(0, 4);
 
 // Community highlights (static)
