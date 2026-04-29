@@ -24,8 +24,8 @@ steps:
       fi
 
      curl --fail-with-body --show-error --silent \
-       --request POST \
-       --header "Content-Type: application/json" \
-       --header "X-Tangled-Event: push" \
-       --data "{\"ref\":\"${TANGLED_REF}\",\"after\":\"${TANGLED_SHA}\",\"repository\":{\"full_name\":\"${TANGLED_REPO_NAME}\"}}" \
+     --request POST \
+     --header "Content-Type: application/json" \
+     --header "X-Tangled-Event: push" \
+     --data "{\"ref\":\"${TANGLED_REF}\",\"after\":\"${TANGLED_SHA}\",\"repository\":{\"full_name\":\"${TANGLED_REPO_NAME}\"}}" \
 "$DOKPLOY_WEBHOOK_URL"
