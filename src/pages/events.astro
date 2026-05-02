@@ -1,46 +1,52 @@
 ---
-import Base from '../layouts/Base.astro';
-import Header from '../components/Header.astro';
-import Footer from '../components/Footer.astro';
-import EventCard from '../components/EventCard.astro';
-import { fetchEvents } from '../lib/events';
-import { fetchSharedEvents } from '../lib/shared-content';
-import { preflight } from '../lib/preflight';
-import yaml from 'js-yaml';
-import communitiesRaw from '../data/communities.yml?raw';
+export const prerender = false;
 
-interface Community {
-  name: string;
-  handle: string;
-  location: string;
+import { actions } from 'astro:actions';
+import { getLiveCollection } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import Header from '../components/layout/Header.astro';
+import Footer from '../components/layout/Footer.astro';
+import EventCard from '../components/events/EventCard.astro';
+import RsvpNotice from '../components/events/RsvpNotice.astro';
+import { getRsvpsForEvents, type CalendarRsvp } from '../lib/rsvps';
+
+const rsvpResult = Astro.getActionResult(actions.rsvpEvent);
+
+if (rsvpResult?.data?.redirectUrl) {
+  return Astro.redirect(rsvpResult.data.redirectUrl, 303);
 }
 
-const communities = yaml.load(communitiesRaw) as Community[];
+if (rsvpResult?.error) {
+  return Astro.redirect('/events?rsvp=error', 303);
+}
 
-// Build event account list: atmosphere.community + all community handles
-const eventAccounts = [
-  'atmosphere.community',
-  ...communities.map(c => c.handle),
-];
+const eventsResult = await getLiveCollection('events');
+const allEvents = (eventsResult.entries ?? [])
+  .map((entry) => entry.data)
+  .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
 
-// Verify core services are reachable
-await preflight();
+const { upcoming: upcomingEvents = [], past: pastEvents = [] } = Object.groupBy(
+  allEvents,
+  (event) => (event.isPast ? 'past' : 'upcoming'),
+);
+pastEvents.reverse();
 
-// Fetch events from ATProto (community.lexicon.calendar.event)
-// Individual community failures are tolerated; only total service outage fails the build.
-const [directEvents, sharedEvents] = await Promise.all([
-  fetchEvents(eventAccounts),
-  fetchSharedEvents(eventAccounts),
-]);
+const loggedInUser = Astro.locals.loggedInUser;
+let rsvpsByEvent = new Map<string, CalendarRsvp>();
+let rsvpReadFailed = false;
 
-// Merge and deduplicate by name + start time
-const seen = new Set<string>();
-const upcomingEvents = [...directEvents, ...sharedEvents].filter(e => {
-  const key = `${e.name.toLowerCase().trim()}|${e.date}`;
-  if (seen.has(key)) return false;
-  seen.add(key);
-  return true;
-}).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+if (loggedInUser) {
+  try {
+    rsvpsByEvent = await getRsvpsForEvents(loggedInUser, [
+      ...upcomingEvents.map((event) => ({ uri: event.atUri })),
+      ...pastEvents.map((event) => ({ uri: event.atUri })),
+    ]);
+  } catch {
+    rsvpReadFailed = true;
+  }
+}
+
+const rsvpMessage = Astro.url.searchParams.get('rsvp');
 ---
 
 <Base title="Events" description="Upcoming AT Protocol community events, meetups, and conferences.">
@@ -53,17 +59,43 @@ const upcomingEvents = [...directEvents, ...sharedEvents].filter(e => {
         Community meetups, conferences, and hangouts across the Atmosphere.
         Events are sourced from <a href="https://smokesignal.events" rel="noopener noreferrer" target="_blank">Smoke Signal</a> and <a href="https://openmeet.net" rel="noopener noreferrer" target="_blank">OpenMeet</a>.
       </p>
+      <RsvpNotice message={rsvpMessage} />
+      {rsvpReadFailed && (
+        <p class="events-notice events-notice--error">We couldn't check which events you're going to right now.</p>
+      )}
 
       {upcomingEvents.length > 0 ? (
         <div class="grid-2 events-grid">
-          {upcomingEvents.map(event => (
-            <EventCard {...event} />
+          {upcomingEvents.map((event) => (
+            <EventCard
+              {...event}
+              showRsvp
+              isLoggedIn={Boolean(loggedInUser)}
+              rsvpStatus={rsvpsByEvent.get(event.atUri)?.record.status}
+              sourceAvatar={event.sourceAvatar}
+            />
           ))}
         </div>
       ) : (
         <div class="events-empty">
           <p>No upcoming events right now. Check back soon or <a href="https://smokesignal.events">create one on Smoke Signal</a>.</p>
         </div>
+      )}
+
+      {pastEvents.length > 0 && (
+        <section class="events-past">
+          <h2 class="events-past__heading">Past events</h2>
+          <div class="grid-2 events-grid">
+            {pastEvents.map((event) => (
+              <EventCard
+                {...event}
+                isLoggedIn={Boolean(loggedInUser)}
+                rsvpStatus={rsvpsByEvent.get(event.atUri)?.record.status}
+                sourceAvatar={event.sourceAvatar}
+              />
+            ))}
+          </div>
+        </section>
       )}
     </div>
   </section>
@@ -83,6 +115,25 @@ const upcomingEvents = [...directEvents, ...sharedEvents].filter(e => {
     line-height: var(--leading-relaxed);
   }
 
+  .events-notice {
+    margin-top: var(--space-base);
+    max-width: 55ch;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+  }
+
+  .events-notice--success {
+    background: var(--teal-100);
+    color: var(--teal-600);
+  }
+
+  .events-notice--error {
+    background: var(--coral-100);
+    color: var(--coral-600);
+  }
+
   .events-grid {
     margin-top: var(--space-xl);
   }
@@ -94,5 +145,18 @@ const upcomingEvents = [...directEvents, ...sharedEvents].filter(e => {
     color: var(--color-text-secondary);
     background: var(--neutral-100);
     border-radius: var(--radius-md);
+  }
+
+  .events-past {
+    margin-top: var(--space-3xl, var(--space-2xl));
+  }
+  .events-past__heading {
+    font-size: var(--text-lg);
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-base);
+  }
+  .events-past :global(.event-card) {
+    filter: grayscale(0.5);
+    background: var(--neutral-50);
   }
 </style>

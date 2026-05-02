@@ -1,125 +1,146 @@
 - name: ATProto Amsterdam
   handle: atproto.amsterdam
   location: Amsterdam, NL
+  region: Europe
   description: Amsterdam ATProtocol user group
   bluesky: https://bsky.app/profile/atproto.amsterdam
 
 - name: ATProto Barcelona
   handle: atproto.barcelona
   location: Barcelona, ES
+  region: Europe
   description: Barcelona ATProtocol user group
   bluesky: https://bsky.app/profile/atproto.barcelona
 
 - name: ATProto Bay Area
   handle: bayarea.atproto.camp
   location: Bay Area, CA
+  region: North America
   description: Bay Area ATProtocol meetup group
   bluesky: https://bsky.app/profile/bayarea.atproto.camp
 
 - name: ATProto Berlin
   handle: atproto.berlin
   location: Berlin, DE
+  region: Europe
   description: Berlin ATProtocol user group
   bluesky: https://bsky.app/profile/atproto.berlin
 
 - name: ATProto Boston
   handle: atproto.boston
   location: Boston, MA
+  region: North America
   description: Boston ATProtocol user group
   bluesky: https://bsky.app/profile/atproto.boston
 
 - name: ATProto Colorado
   handle: colorado.atprotocol.space
   location: Colorado, US
+  region: North America
   description: Colorado ATProtocol user group
   bluesky: https://bsky.app/profile/colorado.atprotocol.space
 
 - name: ATProto Brazil
   handle: atproto.com.br
   location: Brazil
+  region: South America
   description: Brazil ATProtocol user group
   bluesky: https://bsky.app/profile/atproto.com.br
 
 - name: ATProtocol Devs
   handle: atprotocol.dev
   location: Online
+  region: Online
   description: Online ATProtocol developer community
   bluesky: https://bsky.app/profile/atprotocol.dev
 
 - name: ATProto France
   handle: atproto.fr
   location: France
+  region: Europe
   description: France ATProtocol user group
   bluesky: https://bsky.app/profile/atproto.fr
 
 - name: ATProto LA
   handle: atproto.la
   location: Los Angeles, CA
+  region: North America
   description: Los Angeles ATProtocol user group
   bluesky: https://bsky.app/profile/atproto.la
 
 - name: ATProto Lille
   handle: lille.atproto.fr
   location: Lille, FR
+  region: Europe
   description: Lille ATProtocol user group
   bluesky: https://bsky.app/profile/lille.atproto.fr
 
 - name: ATProto London
   handle: atproto.london
   location: London, UK
+  region: Europe
   description: London ATProtocol user group
   bluesky: https://bsky.app/profile/atproto.london
 
 - name: ATProto Montreal
   handle: montreal.atproto.camp
   location: Montreal, QC
+  region: North America
   description: Montreal ATProtocol user group
   bluesky: https://bsky.app/profile/montreal.atproto.camp
 
 - name: Nashproto
   handle: nashproto.com
   location: Nashville, TN
+  region: North America
   description: Nashville ATProtocol user group
   bluesky: https://bsky.app/profile/nashproto.com
 
 - name: ATProto Norway
   handle: atproto.no
   location: Norway
+  region: Europe
   description: Norway ATProtocol user group
   bluesky: https://bsky.app/profile/atproto.no
 
 - name: ATProto NYC
   handle: atproto.nyc
   location: New York City, NY
+  region: North America
   description: New York City ATProtocol user group
   bluesky: https://bsky.app/profile/atproto.nyc
 
 - name: ATProto PDX
   handle: pdx.atproto.camp
   location: Portland, OR
+  region: North America
   description: Portland ATProtocol user group
   bluesky: https://bsky.app/profile/pdx.atproto.camp
 
 - name: Richmond AT://Community
-  handle: richmond.atprotocol.community
+  handle: richmond.atmosphere.community
   location: Richmond, VA, US
+  region: North America
   description: An ATProto Community for Richmond, VA
-  bluesky: https://bsky.app/profile/richmond.atprotocol.community
+  bluesky: https://bsky.app/profile/richmond.atmosphere.community
 
 - name: ATProto Seattle
   handle: seattle.atprotocol.community
   location: Seattle, WA
+  region: North America
   description: Seattle ATProtocol user group
   bluesky: https://bsky.app/profile/seattle.atprotocol.community
 
 - name: ATProto Toronto
   handle: atproto.to
   location: Toronto, ON
+  region: North America
   description: Toronto ATProtocol user group
   bluesky: https://bsky.app/profile/atproto.to
 
 - name: ATProto Vancouver
   handle: vancouver.atprotocol.community
   location: Vancouver, BC
+  region: North America
   description: Vancouver ATProtocol user group
   bluesky: https://bsky.app/profile/vancouver.atprotocol.community

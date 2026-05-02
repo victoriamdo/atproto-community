@@ -1,0 +1,515 @@
+---
+import { getBlueskyAgent } from "@fujocoded/authproto/helpers";
+import Combobox from "./Combobox.astro";
+import AtprotoIcon from "./icons/AtprotoIcon.astro";
+
+const PROFILE_TTL_MS = 60_000;
+type CachedProfile = {
+  expiresAt: number;
+  avatar?: string;
+  displayName?: string;
+};
+const profileCache: Map<string, CachedProfile> =
+  (globalThis as any).__authMenuProfileCache ??
+  ((globalThis as any).__authMenuProfileCache = new Map());
+
+async function loadProfile(did: string): Promise<CachedProfile | null> {
+  const now = Date.now();
+  const cached = profileCache.get(did);
+  if (cached && cached.expiresAt > now) return cached;
+  try {
+    const agent = await getBlueskyAgent();
+    const profile = await agent?.app.bsky.actor.getProfile({ actor: did });
+    const entry: CachedProfile = {
+      expiresAt: now + PROFILE_TTL_MS,
+      avatar: profile?.data.avatar,
+      displayName: profile?.data.displayName,
+    };
+    profileCache.set(did, entry);
+    return entry;
+  } catch (err) {
+    // Don't poison the cache on transient failures, but surface it server-side
+    // so a degraded appview doesn't disappear silently behind "no avatar".
+    console.warn("[AuthMenu] failed to load profile", did, err);
+    return cached ?? null;
+  }
+}
+
+const loggedInUser = Astro.locals.loggedInUser;
+const authError =
+  Astro.locals.authproto?.errorDescription ?? Astro.locals.authproto?.errorCode;
+
+const profile = loggedInUser ? await loadProfile(loggedInUser.did) : null;
+const displayName = profile?.displayName?.trim() || loggedInUser?.handle || "";
+const avatarUrl = profile?.avatar;
+const avatarInitial = (displayName || "@").charAt(0).toUpperCase();
+---
+
+<details class="auth-menu" open={!loggedInUser && authError ? true : undefined}>
+  {
+    loggedInUser ? (
+      <>
+        <summary
+          class="auth-summary"
+          aria-label={`Signed in as ${loggedInUser.handle}`}
+        >
+          {avatarUrl ? (
+            <img
+              class="auth-avatar"
+              src={avatarUrl}
+              alt=""
+              width="32"
+              height="32"
+              loading="lazy"
+              decoding="async"
+            />
+          ) : (
+            <span class="auth-avatar auth-avatar--fallback" aria-hidden="true">
+              {avatarInitial}
+            </span>
+          )}
+          <span class="auth-handle">{displayName}</span>
+        </summary>
+        <div class="auth-popover">
+          <p class="auth-status">
+            Signed in as <strong>@{loggedInUser.handle}</strong>
+          </p>
+          <form class="auth-form" action="/oauth/logout" method="post">
+            <button class="auth-button auth-button--secondary" type="submit">
+              Log out
+            </button>
+          </form>
+        </div>
+      </>
+    ) : (
+      <>
+        <summary class="auth-summary auth-summary--login">
+          <AtprotoIcon class="auth-summary-logo" />
+          Sign in
+        </summary>
+        <form class="auth-popover auth-form" action="/oauth/login" method="post">
+          <header class="auth-form-header">
+            <p class="auth-form-title">Sign in to the Atmosphere</p>
+            <p class="auth-form-hint">
+              Your{" "}
+              <a
+                class="auth-form-link"
+                href="https://atmosphereaccount.com"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Atmosphere account
+              </a>{" "}
+              lets you access dozens of websites—including this one!
+            </p>
+          </header>
+          <Combobox
+            id="header-atproto-id"
+            name="atproto-id"
+            label="Bluesky handle"
+            placeholder="handle.bsky.social"
+            inputClass="auth-input"
+            autocomplete="username webauthn"
+            inputmode="url"
+          >
+            <AtprotoIcon slot="leading-icon" width={18} height={18} />
+          </Combobox>
+          {authError && (
+            <p class="auth-error" role="alert">
+              {authError}
+            </p>
+          )}
+          <button class="auth-button" type="submit" disabled data-auth-submit>
+            <span class="auth-button__label">Sign in</span>
+            <span class="auth-button__spinner" aria-hidden="true" />
+          </button>
+        </form>
+      </>
+    )
+  }
+</details>
+
+<script>
+  type Actor = {
+    handle: string;
+    displayName?: string;
+    avatar?: string;
+  };
+  type Suggestion = {
+    value: string;
+    label?: string;
+    sublabel?: string;
+    avatar?: string;
+  };
+
+  const HANDLE_SUFFIXES = [
+    "bsky.social",
+    "atproto.camp",
+    "atprotocol.community",
+    "atprotocol.space",
+    "blacksky.social",
+  ];
+  const PLACEHOLDER_RESET_DELAY_MS = 30_000;
+  const SEARCH_ACTORS_URL =
+    "https://public.api.bsky.app/xrpc/app.bsky.actor.searchActorsTypeahead";
+
+  const searchBskyActors = async (q: string): Promise<Suggestion[]> => {
+    const url = new URL(SEARCH_ACTORS_URL);
+    url.searchParams.set("q", q);
+    url.searchParams.set("limit", "8");
+    const res = await fetch(url, { headers: { accept: "application/json" } });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { actors?: Actor[] };
+    return (data.actors ?? []).map((a) => ({
+      value: a.handle,
+      label: a.displayName || a.handle,
+      sublabel: `@${a.handle}`,
+      avatar: a.avatar,
+    }));
+  };
+
+  const wireSubmitButton = (form: HTMLFormElement, field: HTMLInputElement) => {
+    const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (!submit) return;
+    const sync = () => {
+      // Don't override the loading state once the form is submitting.
+      if (submit.dataset.loading === "true") return;
+      submit.disabled = field.value.trim().length === 0;
+    };
+    field.addEventListener("input", sync);
+    field.addEventListener("change", sync);
+    sync();
+
+    form.addEventListener("submit", () => {
+      submit.dataset.loading = "true";
+      submit.disabled = true;
+      const label = submit.querySelector<HTMLElement>(".auth-button__label");
+      if (label) label.textContent = "Signing in…";
+    });
+  };
+
+  const wirePlaceholderRotation = (
+    details: HTMLDetailsElement,
+    field: HTMLInputElement,
+  ) => {
+    let clearTimer: ReturnType<typeof setTimeout> | null = null;
+    details.addEventListener("toggle", () => {
+      if (!details.open) {
+        details.querySelector(".auth-error")?.remove();
+        clearTimer = setTimeout(() => {
+          field.value = "";
+          // Event constructor defaults bubbles to false; opt in so the synthetic
+          // event matches the native one.
+          field.dispatchEvent(new Event("input", { bubbles: true }));
+        }, PLACEHOLDER_RESET_DELAY_MS);
+        return;
+      }
+      if (clearTimer) {
+        clearTimeout(clearTimer);
+        clearTimer = null;
+      }
+      const suffix =
+        HANDLE_SUFFIXES[Math.floor(Math.random() * HANDLE_SUFFIXES.length)];
+      field.placeholder = `handle.${suffix}`;
+      field.focus({ preventScroll: true });
+    });
+  };
+
+  const wireDismissBehavior = () => {
+    const openMenus = () =>
+      document.querySelectorAll<HTMLDetailsElement>("details.auth-menu[open]");
+
+    document.addEventListener("pointerdown", (e) => {
+      const target = e.target as Node | null;
+      const { clientX: x, clientY: y } = e;
+      openMenus().forEach((d) => {
+        if (target && d.contains(target)) return;
+        // Browser-extension overlays (e.g. 1Password) render outside our DOM but
+        // geographically over the input. Treat clicks inside the visual bounds
+        // of the trigger or popover as "inside" so the popover doesn't close.
+        const rects: DOMRect[] = [d.getBoundingClientRect()];
+        const popover = d.querySelector(".auth-popover");
+        if (popover) rects.push(popover.getBoundingClientRect());
+        const inside = rects.some(
+          (r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom,
+        );
+        if (inside) return;
+        d.open = false;
+      });
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      openMenus().forEach((d) => {
+        d.open = false;
+        d.querySelector<HTMLElement>("summary")?.focus();
+      });
+    });
+  };
+
+  const input = document.getElementById(
+    "header-atproto-id",
+  ) as HTMLInputElement | null;
+  if (input?.form) wireSubmitButton(input.form, input);
+
+  const details = input?.closest<HTMLDetailsElement>("details.auth-menu");
+  if (details && input) wirePlaceholderRotation(details, input);
+
+  const combobox = input?.closest("cmb-combobox");
+  combobox?.addEventListener("combobox-search", (e) => {
+    const detail = (e as CustomEvent<{ query: string; results: Promise<Suggestion[]> | null }>)
+      .detail;
+    detail.results = searchBskyActors(detail.query);
+  });
+
+  wireDismissBehavior();
+</script>
+
+<style>
+  .auth-menu {
+    position: relative;
+    flex: 0 0 auto;
+  }
+
+  .auth-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    min-height: 36px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    padding: 2px var(--space-md) 2px 2px;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    line-height: 1;
+    list-style: none;
+    cursor: pointer;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .auth-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .auth-summary:hover,
+  .auth-menu[open] .auth-summary {
+    background: var(--blue-50);
+    border-color: var(--blue-200);
+    color: var(--color-primary);
+  }
+
+  .auth-summary:focus-visible,
+  .auth-button:focus-visible,
+  :global(.auth-input:focus-visible) {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  .auth-summary--login {
+    padding: var(--space-sm) var(--space-base);
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-text-on-primary);
+  }
+
+  .auth-summary--login:hover,
+  .auth-menu[open] .auth-summary--login {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+    color: var(--color-text-on-primary);
+  }
+
+  .auth-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--blue-100);
+  }
+
+  .auth-avatar--fallback {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-primary);
+    font-weight: 700;
+  }
+
+  .auth-handle {
+    max-width: 13ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .auth-popover {
+    position: absolute;
+    top: calc(100% + var(--space-sm));
+    right: 0;
+    z-index: 20;
+    width: min(280px, calc(100vw - 2 * var(--space-lg)));
+    padding: var(--space-base);
+    background: var(--color-surface-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: 0 18px 48px oklch(22% 0.01 250 / 0.14);
+  }
+
+  .auth-form {
+    display: grid;
+    gap: var(--space-sm);
+  }
+
+  .auth-form-header {
+    display: grid;
+    gap: 2px;
+  }
+
+  .auth-form-title {
+    margin: 0;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    line-height: var(--leading-tight);
+  }
+
+  .auth-summary-logo {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+  }
+
+  .auth-form-hint {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    line-height: var(--leading-normal);
+  }
+
+  .auth-form-link {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .auth-form-link:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  /* :global because the input is rendered inside <Combobox>, so Astro's scoped
+     selector for this component wouldn't reach it. */
+  :global(.auth-input) {
+    width: 100%;
+    min-height: 40px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-sm) var(--space-md);
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--text-sm);
+  }
+
+  .auth-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    min-height: 40px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: var(--color-primary);
+    color: var(--color-text-on-primary);
+    font: inherit;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .auth-button__spinner {
+    display: none;
+    width: 14px;
+    height: 14px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: auth-button-spin 0.7s linear infinite;
+  }
+  .auth-button[data-loading="true"] .auth-button__spinner {
+    display: inline-block;
+  }
+  .auth-button[data-loading="true"] {
+    cursor: progress;
+  }
+  @keyframes auth-button-spin {
+    to { transform: rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .auth-button__spinner {
+      animation: none;
+    }
+  }
+
+  .auth-button:hover {
+    background: var(--color-primary-hover);
+  }
+
+  .auth-button:disabled {
+    background: var(--color-border);
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+  }
+  .auth-button:disabled:hover {
+    background: var(--color-border);
+  }
+
+  .auth-button--secondary {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-primary);
+  }
+
+  .auth-button--secondary:hover {
+    background: var(--blue-50);
+  }
+
+  .auth-status {
+    margin-bottom: var(--space-sm);
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+  }
+
+  .auth-error {
+    color: var(--coral-600);
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+  }
+
+  @media (max-width: 640px) {
+    .auth-menu {
+      margin-left: auto;
+      order: 1;
+    }
+
+    .auth-handle {
+      display: none;
+    }
+
+    .auth-summary {
+      padding-right: 2px;
+    }
+
+    .auth-summary--login {
+      padding-inline: var(--space-md);
+    }
+
+    .auth-popover {
+      right: -36px;
+    }
+  }
+</style>

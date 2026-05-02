@@ -1,51 +1,48 @@
 ---
+import Avatar, { type AvatarSource } from "../Avatar.astro";
+
 interface Props {
   title: string;
-  excerpt: string;
-  author: string;
-  date: string;
-  href: string;
-  tag?: string;
-  avatarUrl?: string;
-  community?: string;
+  url: string;
+  excerpt?: string;
+  publishedAt?: Date;
+  sharedAt: Date;
+  author: {
+    did: string;
+    handle: string;
+    displayName?: string;
+    avatar: AvatarSource;
+  };
+  source: string;
+  documentUri?: string;
+  tags?: string[];
 }
 
-const { title, excerpt, author, date, href, tag, avatarUrl, community } = Astro.props;
+const { title, url, excerpt, publishedAt, sharedAt, author, source, tags } = Astro.props;
 
-// Generate a deterministic color from the author handle
-function authorColor(name: string): string {
-  let hash = 0;
-  for (const ch of name) hash = ((hash << 5) - hash + ch.charCodeAt(0)) | 0;
-  const hue = ((hash % 360) + 360) % 360;
-  return `oklch(55% 0.12 ${hue})`;
-}
-
-const initials = author
-  .replace(/^@/, '')
-  .split(/[.\-_ ]/)
-  .slice(0, 2)
-  .map(s => s[0]?.toUpperCase() ?? '')
-  .join('');
+const date = publishedAt ?? sharedAt;
+const authorLabel = author.displayName || `@${author.handle}`;
+const tag = tags?.[0];
+const community = `@${source}`;
 ---
 
 <article class="post-card">
-  <a href={href} class="post-card__link" rel="noopener noreferrer" target="_blank">
-    {avatarUrl ? (
-      <img src={avatarUrl} alt="" class="post-card__avatar-img" width="36" height="36" loading="lazy" />
-    ) : (
-      <div class="post-card__avatar" style={`background: ${authorColor(author)}`} aria-hidden="true">
-        {initials}
-      </div>
-    )}
+  <a href={url} class="post-card__link" rel="noopener noreferrer" target="_blank">
+    <Avatar
+      avatar={author.avatar}
+      size={36}
+      imgClass="post-card__avatar-img"
+      fallbackClass="post-card__avatar"
+    />
     <div class="post-card__body">
       <h3 class="post-card__title">{title}</h3>
-      <p class="post-card__excerpt">{excerpt}</p>
+      {excerpt && <p class="post-card__excerpt">{excerpt}</p>}
       <div class="post-card__meta">
         {tag && <span class="badge badge--tag">{tag}</span>}
-        {community && <span class="badge badge--location">{community}</span>}
-        <span class="post-card__author">{author}</span>
+        <span class="badge badge--location">{community}</span>
+        <span class="post-card__author">{authorLabel}</span>
         <span class="post-card__date">
-          <time datetime={date}>{new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</time>
+          <time datetime={date.toISOString()}>{date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</time>
         </span>
       </div>
     </div>
@@ -71,7 +68,7 @@ const initials = author
     color: inherit;
   }
 
-  .post-card__avatar-img {
+  .post-card :global(.post-card__avatar-img) {
     flex-shrink: 0;
     width: 36px;
     height: 36px;
@@ -79,7 +76,7 @@ const initials = author
     object-fit: cover;
   }
 
-  .post-card__avatar {
+  .post-card :global(.post-card__avatar) {
     flex-shrink: 0;
     width: 36px;
     height: 36px;

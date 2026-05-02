@@ -13,7 +13,20 @@
     "astro": "astro"
   },
   "dependencies": {
+    "@astrojs/check": "^0.9.8",
     "@astrojs/node": "^10.0.5",
-    "astro": "^6.1.7"
+    "@atproto/api": "^0.17.3",
+    "@atproto/identity": "^0.4.8",
+    "@atproto/syntax": "^0.4.3",
+    "@fujocoded/astro-atproto-loader": "^0.2.1",
+    "@fujocoded/authproto": "^0.3.1",
+    "astro": "^6.1.7",
+    "js-yaml": "^4.1.0",
+    "mdast-util-to-string": "^4.0.0",
+    "remark": "^15.0.1",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9"
   }
 }

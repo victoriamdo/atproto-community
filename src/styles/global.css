@@ -205,6 +205,11 @@ p + p { margin-top: var(--space-base); }
   padding: var(--space-base);
 }
 
+/* The HTML `hidden` attribute should always win over author display rules. */
+[hidden] {
+  display: none !important;
+}
+
 /* --- Badge / Pill --- */
 .badge {
   display: inline-flex;

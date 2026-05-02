@@ -1,14 +1,14 @@
 // @ts-check
 import { defineConfig } from "astro/config";
-import authproto from "@fujocoded/authproto";
 
 import node from "@astrojs/node";
+import authproto from "@fujocoded/authproto";
 
 // https://astro.build/config
 export default defineConfig({
   site: "https://atmosphere.community",
   base: "/",
-  output: "static",
+  output: "server",
   server: {
     host: true,
   },

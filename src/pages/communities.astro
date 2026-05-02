@@ -1,34 +1,27 @@
 ---
-import Base from '../layouts/Base.astro';
-import Header from '../components/Header.astro';
-import Footer from '../components/Footer.astro';
-import CommunityCard from '../components/CommunityCard.astro';
-import yaml from 'js-yaml';
-import communitiesRaw from '../data/communities.yml?raw';
-import { getProfile } from '../lib/atproto';
+import Base from "../layouts/Base.astro";
+import Header from "../components/layout/Header.astro";
+import Footer from "../components/layout/Footer.astro";
+import CommunityCard from "../components/communities/CommunityCard.astro";
+import { getLiveCollection } from "astro:content";
 
-interface Community {
-  name: string;
-  handle: string;
-  location: string;
-  description?: string;
-  bluesky?: string;
-  website?: string;
+const communitiesResult = await getLiveCollection("communities");
+const communities = communitiesResult.entries?.map((entry) => entry.data) ?? [];
+
+const REGION_ORDER = ["North America", "South America", "Europe", "Online", "Other"];
+const grouped = new Map<string, typeof communities>();
+for (const community of communities) {
+  const region = community.region ?? "Other";
+  if (!grouped.has(region)) grouped.set(region, []);
+  grouped.get(region)!.push(community);
 }
-
-const communities = yaml.load(communitiesRaw) as Community[];
-
-// Fetch Bluesky profile avatars for communities
-const communityProfiles = await Promise.allSettled(
-  communities.map(c => getProfile(c.handle))
+const regionRank = (r: string) => {
+  const i = REGION_ORDER.indexOf(r);
+  return i === -1 ? REGION_ORDER.length : i;
+};
+const regions = [...grouped.keys()].sort(
+  (a, b) => regionRank(a) - regionRank(b) || a.localeCompare(b),
 );
-const communityAvatars = new Map<string, string>();
-for (let i = 0; i < communities.length; i++) {
-  const result = communityProfiles[i];
-  if (result.status === 'fulfilled' && result.value.avatar) {
-    communityAvatars.set(communities[i].handle, result.value.avatar);
-  }
-}
 ---
 
 <Base title="Communities" description="Find AT Protocol communities around the world.">
@@ -42,14 +35,19 @@ for (let i = 0; i < communities.length; i++) {
         Find one near you or <a href="https://bsky.app/profile/ngerakines.me" rel="noopener noreferrer" target="_blank">start your own</a>.
       </p>
 
-      <div class="communities-grid">
-        {communities.map(c => (
-          <div class="community-entry">
-            <CommunityCard {...c} avatar={communityAvatars.get(c.handle)} />
-            {c.description && <p class="community-desc">{c.description}</p>}
+      {regions.map((region) => (
+        <section class="region-group">
+          <h2 class="region-heading">{region}</h2>
+          <div class="communities-grid">
+            {grouped.get(region)!.map(c => (
+              <div class="community-entry">
+                <CommunityCard {...c} />
+                {c.description && <p class="community-desc">{c.description}</p>}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </section>
+      ))}
     </div>
   </section>
 
@@ -68,11 +66,23 @@ for (let i = 0; i < communities.length; i++) {
     line-height: var(--leading-relaxed);
   }
 
+  .region-group {
+    margin-top: var(--space-xl);
+  }
+
+  .region-heading {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 var(--space-base);
+  }
+
   .communities-grid {
     display: flex;
     flex-direction: column;
     gap: var(--space-lg);
-    margin-top: var(--space-xl);
   }
 
   .community-entry {

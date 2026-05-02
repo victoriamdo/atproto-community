@@ -1,0 +1,32 @@
+---
+export type AvatarSource = { url: string } | { initials: string; color: string };
+
+interface Props {
+  avatar: AvatarSource;
+  size: number;
+  imgClass?: string;
+  fallbackClass?: string;
+  alt?: string;
+}
+
+const { avatar, size, imgClass, fallbackClass, alt = "" } = Astro.props;
+---
+{"url" in avatar ? (
+  <img
+    src={avatar.url}
+    alt={alt}
+    class={imgClass}
+    width={size}
+    height={size}
+    loading="lazy"
+    decoding="async"
+  />
+) : (
+  <span
+    class={fallbackClass}
+    style={`background: ${avatar.color}`}
+    aria-hidden="true"
+  >
+    {avatar.initials}
+  </span>
+)}

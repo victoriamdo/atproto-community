@@ -1,0 +1,48 @@
+---
+interface Props {
+  message: string | null;
+  eventName?: string | null;
+}
+
+const { message, eventName } = Astro.props;
+---
+
+{message === 'going' && (
+  <p class="events-notice events-notice--success">
+    {eventName ? `You're going to ${eventName}.` : "You're marked as going."}
+  </p>
+)}
+{message === 'notgoing' && (
+  <p class="events-notice events-notice--success">
+    {eventName ? `You're no longer going to ${eventName}.` : "You're no longer marked as going."}
+  </p>
+)}
+{message === 'permission' && (
+  <p class="events-notice events-notice--error">Your login needs RSVP permission. Log out and log back in, then try again.</p>
+)}
+{message === 'error' && (
+  <p class="events-notice events-notice--error">
+    {eventName ? `We couldn't save your RSVP for ${eventName}. Please try again.` : "We couldn't save your RSVP. Please try again."}
+  </p>
+)}
+
+<style>
+  .events-notice {
+    margin-top: var(--space-base);
+    max-width: 55ch;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+  }
+
+  .events-notice--success {
+    background: var(--teal-100);
+    color: var(--teal-600);
+  }
+
+  .events-notice--error {
+    background: var(--coral-100);
+    color: var(--coral-600);
+  }
+</style>
